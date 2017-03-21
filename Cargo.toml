@@ -1,0 +1,20 @@
+[package]
+name = "machfind"
+version = "0.1.0"
+authors = ["Armin Ronacher <armin.ronacher@active-4.com>"]
+
+[lib]
+name = "libmachfind"
+path = "src/lib.rs"
+
+[[bin]]
+name = "machfind"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "2", default-features = false, features = ["suggestions", "wrap_help"] }
+mach_object = "0.1.3"
+walkdir = "0.1.5"
+uuid = "^0.4"
+error-chain = "^0.9.0"
+memmap = "^0.5.0"
