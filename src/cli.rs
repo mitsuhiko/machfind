@@ -61,12 +61,9 @@ pub fn main() {
     match execute() {
         Ok(()) => {},
         Err(err) => {
-            use std::error::Error;
             println!("error: {}", err);
-            let mut cause = err.cause();
-            while let Some(the_cause) = cause {
-                println!("  caused by: {}", the_cause);
-                cause = the_cause.cause();
+            for cause in err.iter().skip(1) {
+                println!("  caused by: {}", cause);
             }
             process::exit(1);
         }
