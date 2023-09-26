@@ -1,51 +1,55 @@
-#![cfg(feature = "cargo")]
-
 use std::env;
+use std::fs::File;
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::process;
 
-use error::Result;
+use crate::error::Result;
 
-use clap::{crate_authors, crate_version, value_parser, Command};
+use clap::{value_parser, Arg, Command};
 use mach_object::{LoadCommand, MachCommand, OFile};
-use memmap;
+use memmap::MmapOptions;
 use uuid::Uuid;
 use walkdir::WalkDir;
 
+const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 fn execute() -> Result<()> {
     let matches = Command::new("machfind")
-        .version(crate_version!())
+        .version(VERSION)
         .about("This tool finds debug symbols by UUID.")
-        .author(crate_authors!("\n"))
+        .author(AUTHORS)
         .arg(
-            arg!(
-                -u --uuid <UUID> "The UUID to find"
-            )
-            .index(1)
-            .required(true),
+            Arg::new("uuid")
+                .short('u')
+                .long("uuid")
+                .help("The UUID to find")
+                // .index(1)
+                .required(true)
+                .value_parser(value_parser!(String)),
         )
-        .value_parser(value_parser!(String))
         .arg(
-            arg!(
-                -p --path <PATH> "The path to start the search at (defaults to '.')"
-            )
-            .default_value(env::current_dir()?)
-            .index(2)
-            .required(false),
+            Arg::new("path")
+                .short('p')
+                .long("path")
+                .help("The path to start the search at")
+                .default_value(env::current_dir().unwrap().into_os_string())
+                // .index(2)
+                .required(false)
+                .value_parser(value_parser!(PathBuf)),
         )
-        .value_parser(value_parser!(PathBuf))
         .get_matches();
 
-    let base = matches.get_one("uuid");
-    let uuid: Uuid = match matches.get_one("uuid").unwrap().parse() {
+    let base = matches.get_one::<PathBuf>("path").unwrap().as_path();
+    let uuid: Uuid = match matches.get_one::<String>("uuid").unwrap().parse() {
         Ok(value) => value,
         Err(_) => {
             return Err("Invalid UUID".into());
         }
     };
 
-    let wd = WalkDir::new(&base);
+    let wd = WalkDir::new(base);
     for dir_ev in wd {
         let dir = dir_ev?;
         let md = dir.metadata()?;
@@ -67,10 +71,10 @@ pub fn main() {
         Err(err) => {
             use std::error::Error;
             println!("error: {}", err);
-            let mut cause = err.cause();
+            let mut cause = err.source();
             while let Some(the_cause) = cause {
                 println!("  caused by: {}", the_cause);
-                cause = the_cause.cause();
+                cause = the_cause.source();
             }
             process::exit(1);
         }
@@ -78,14 +82,15 @@ pub fn main() {
 }
 
 fn get_uuids(path: &Path) -> Result<Vec<Uuid>> {
-    let mmap = memmap::Mmap::open_path(path, memmap::Protection::Read)?;
-    let mut cursor = Cursor::new(unsafe { mmap.as_slice() });
+    let file = File::open(path)?;
+    let mmap = unsafe { MmapOptions::new().map(&file)? };
+    let mut cursor = Cursor::new(mmap.as_ref());
     let ofile = OFile::parse(&mut cursor)?;
     let mut uuids = vec![];
 
     match ofile {
         OFile::FatFile { ref files, .. } => {
-            for &(_, ref file) in files {
+            for (_, file) in files {
                 extract_uuids(&mut uuids, file);
             }
         }
@@ -99,13 +104,10 @@ fn get_uuids(path: &Path) -> Result<Vec<Uuid>> {
 }
 
 fn extract_uuids<'a>(uuids: &'a mut Vec<Uuid>, file: &'a OFile) {
-    if let &OFile::MachFile { ref commands, .. } = file {
-        for &MachCommand(ref load_cmd, _) in commands {
-            match load_cmd {
-                &LoadCommand::Uuid(uuid) => {
-                    uuids.push(uuid);
-                }
-                _ => {}
+    if let OFile::MachFile { commands, .. } = file {
+        for MachCommand(load_cmd, _) in commands {
+            if let &LoadCommand::Uuid(uuid) = load_cmd {
+                uuids.push(uuid);
             }
         }
     }
