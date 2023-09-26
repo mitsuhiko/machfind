@@ -25,7 +25,6 @@ fn execute() -> Result<()> {
                 .short('u')
                 .long("uuid")
                 .help("The UUID to find")
-                // .index(1)
                 .required(true)
                 .value_parser(value_parser!(String)),
         )
@@ -35,7 +34,6 @@ fn execute() -> Result<()> {
                 .long("path")
                 .help("The path to start the search at")
                 .default_value(env::current_dir().unwrap().into_os_string())
-                // .index(2)
                 .required(false)
                 .value_parser(value_parser!(PathBuf)),
         )
