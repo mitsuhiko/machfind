@@ -1,12 +1,13 @@
 #![recursion_limit = "1024"]
-extern crate uuid;
 extern crate clap;
 extern crate mach_object;
-extern crate walkdir;
 extern crate memmap;
-#[macro_use] extern crate error_chain;
+extern crate uuid;
+extern crate walkdir;
+#[macro_use]
+extern crate error_chain;
+
+mod cli;
+mod error;
 
 pub use cli::main;
-
-mod error;
-mod cli;
